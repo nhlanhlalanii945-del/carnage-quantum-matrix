@@ -3,17 +3,12 @@ import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
 
-# ----------------------------------------------------
-# PAGE CONFIG & STYLING
-# ----------------------------------------------------
-st.set_page_config(
-    page_title="CRT Cloud Terminal",
-    page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# --- App Config ---
+st.set_page_config(page_title="CRT Cloud Terminal", layout="wide")
+st.title("⚡ CARNAGE TRADING TERMINAL (CRT Edition)")
+st.write("---")
 
-# Dark Mode CSS Tweaks
+# --- CSS Styling Injection ---
 st.markdown("""
     <style>
     .stMetric {
@@ -23,163 +18,142 @@ st.markdown("""
         border-radius: 10px;
     }
     </style>
-""", unsafe_render_html=True)
+""", unsafe_allow_html=True) # <-- Corrected argument to prevent TypeErrors
 
-# ----------------------------------------------------
-# HEADER
-# ----------------------------------------------------
-st.title("⚡ CRT Cloud Market Terminal")
-st.caption("No Windows PC. No local MT5 terminal. 100% cloud-native live data via Yahoo Finance.")
-st.write("---")
+# --- UI Inputs (Rands & Timeframes) ---
+st.sidebar.header("🛠️ Core Configuration")
 
-# ----------------------------------------------------
-# SIDEBAR SETTINGS
-# ----------------------------------------------------
-st.sidebar.header("⚙️ Configuration")
-
-# Dynamic asset map (Forex and Gold Spot proxy)
+# Mapping assets to cloud-friendly Yahoo Finance tick markers
 asset_map = {
-    "Gold Spot (Proxy: GC=F)": "GC=F",
-    "EUR/USD": "EURUSD=X",
-    "GBP/USD": "GBPUSD=X",
-    "USD/JPY": "USDJPY=X",
-    "GBP/JPY": "GBPJPY=X"
+    "XAUUSD (Gold Spot)": "GC=F",
+    "EURUSD": "EURUSD=X",
+    "GBPUSD": "GBPUSD=X",
+    "GBPJPY": "GBPJPY=X"
 }
+selected_asset = st.sidebar.selectbox("Target Asset", list(asset_map.keys()))
+ticker_symbol = asset_map[selected_asset]
 
-selected_asset = st.sidebar.selectbox("Select Trading Asset", list(asset_map.keys()), index=0)
-ticker = asset_map[selected_asset]
+# Interval Configuration
+ltf_interval = st.sidebar.selectbox("Execution TF (Lower Timeframe)", ["1m", "5m", "15m", "1h"], index=1)
+htf_interval = st.sidebar.selectbox("CRT HTF Range Source", ["1h", "1d", "1wk"], index=1)
 
-# Interval setup
-ltf_interval = st.sidebar.selectbox(
-    "Execution TF (Lower Timeframe Chart)",
-    ["1m", "5m", "15m", "30m", "1h"],
-    index=1
-)
-
-htf_interval = st.sidebar.selectbox(
-    "CRT Range TF (Higher Timeframe Source)",
-    ["1h", "1d", "1wk"],
-    index=1
-)
-
-# Dynamic periods to prevent API errors
-ltf_period_map = {"1m": "1d", "5m": "5d", "15m": "5d", "30m": "5d", "1h": "1mo"}
+# Set dynamic lookup parameters to avoid API request limits
+ltf_period_map = {"1m": "1d", "5m": "5d", "15m": "5d", "1h": "1mo"}
 htf_period_map = {"1h": "1mo", "1d": "3mo", "1wk": "1y"}
 
-ltf_period = ltf_period_map[ltf_interval]
-htf_period = htf_period_map[htf_interval]
+# Capital setup in Rands (R)
+st.sidebar.write("---")
+capital_zar = st.sidebar.number_input("Account Capital (R)", value=10000.0, step=500.0)
+risk_percent = st.sidebar.slider("Risk per Trade (%)", 0.5, 5.0, 1.0)
 
-# ----------------------------------------------------
-# DATA LOADER
-# ----------------------------------------------------
-@st.cache_data(ttl=10) # Auto-refresh data cache every 10 seconds
-def fetch_market_data(symbol, period, interval):
+# --- Cloud Data Fetch Engine ---
+@st.cache_data(ttl=15) # Keep data fresh and update cache every 15 seconds
+def fetch_cloud_market_data(symbol, period, interval):
     try:
         df = yf.download(tickers=symbol, period=period, interval=interval, progress=False)
         if df.empty:
             return None
-        # Standardize multi-index columns if yfinance returns them
         df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
         return df.dropna()
     except Exception:
         return None
 
-# Fetch Data
-with st.spinner("Syncing live market feeds..."):
-    df_ltf = fetch_market_data(ticker, ltf_period, ltf_interval)
-    df_htf = fetch_market_data(ticker, htf_period, htf_interval)
+# Execution
+with st.spinner("Streaming data from global market cloud..."):
+    df_ltf = fetch_cloud_market_data(ticker_symbol, ltf_period_map[ltf_interval], ltf_interval)
+    df_htf = fetch_cloud_market_data(ticker_symbol, htf_period_map[htf_interval], htf_interval)
 
-# Determine decimal formatting based on pair type
-decimals = 5 if ("=X" in ticker and "JPY" not in ticker) else 2
+decimals = 5 if ("=X" in ticker_symbol and "JPY" not in ticker_symbol) else 2
 
-if df_ltf is not None and df_htf is not None and len(df_ltf) >= 2 and len(df_htf) >= 2:
+# --- Execution & Logic core ---
+if df_ltf is not None and df_htf is not None and len(df_ltf) >= 3 and len(df_htf) >= 2:
     
-    # ----------------------------------------------------
-    # CRT RANGE CALCULATION (Using previous closed HTF candle)
-    # ----------------------------------------------------
-    crt_candle = df_htf.iloc[-2]  # The completed previous HTF candle
+    # 1. Establish the HTF CRT Range (Using the previous completed candle)
+    crt_candle = df_htf.iloc[-2]
     crt_high = float(crt_candle['High'])
     crt_low = float(crt_candle['Low'])
     equilibrium = (crt_high + crt_low) / 2.0
     
-    # Quarterly ranges (25% and 75% levels)
-    premium_quarter = crt_low + 0.75 * (crt_high - crt_low)
-    discount_quarter = crt_low + 0.25 * (crt_high - crt_low)
-    
-    # Current Execution Price
+    # 2. Get Live Executable Price
     current_price = float(df_ltf['Close'].iloc[-1])
-    price_change = current_price - float(df_ltf['Close'].iloc[-2])
-    pct_change = (price_change / float(df_ltf['Close'].iloc[-2])) * 100
-
-    # ----------------------------------------------------
-    # METRICS DISPLAY
-    # ----------------------------------------------------
-    st.subheader(f"📊 Live {selected_asset} Overview")
     
-    col_price, col_high, col_eq, col_low = st.columns(4)
-    col_price.metric(
-        label="Live Price",
-        value=f"{current_price:.{decimals}f}",
-        delta=f"{price_change:+.{decimals}f} ({pct_change:+.2f}%)"
-    )
-    col_high.metric(label=f"HTF Range High ({htf_interval})", value=f"{crt_high:.{decimals}f}")
-    col_eq.metric(label="Equilibrium (50%)", value=f"{equilibrium:.{decimals}f}")
-    col_low.metric(label=f"HTF Range Low ({htf_interval})", value=f"{crt_low:.{decimals}f}")
-
-    # ----------------------------------------------------
-    # CRT STATE ANALYSIS
-    # ----------------------------------------------------
-    st.write("### 🎯 Candle Range Theory (CRT) Analysis")
+    # 3. Process Signals
+    recent_high = float(df_ltf['High'].iloc[-1])
+    recent_low = float(df_ltf['Low'].iloc[-1])
+    recent_close = float(df_ltf['Close'].iloc[-1])
     
-    if current_price > crt_high:
-        st.error(f"🚨 Price has swept above the HTF Range High ({crt_high:.{decimals}f}). Watch out for external liquidity sweeps & reversals!")
-    elif current_price < crt_low:
-        st.success(f"🚨 Price has swept below the HTF Range Low ({crt_low:.{decimals}f}). Look for liquidity sweeps & LTF structural shifts!")
-    elif current_price > equilibrium:
-        st.info(f"🔴 Price is trading in the **PREMIUM** zone (Above 50% Equilibrium). Look for shorts if LTF trend shifts bearish.")
+    # Sweep Check
+    swept_high = recent_high > crt_high and recent_close < crt_high
+    swept_low = recent_low < crt_low and recent_close > crt_low
+    
+    # Imbalance Check (Simple Fair Value Gap Detection)
+    c1_low = float(df_ltf['Low'].iloc[-3])
+    c3_high = float(df_ltf['High'].iloc[-1])
+    fvg_exists = c1_low > c3_high
+    
+    if swept_high:
+        signal = "BEARISH"
+        confidence = 88.0 if fvg_exists else 65.0
+        entry_price = current_price
+        stop_loss = recent_high + (recent_high * 0.0005)
+        take_profit = crt_low
+        reasoning = (
+            f"Liquidity Sweep confirmed. Price aggressively ran buy stops above the HTF Range High ({crt_high:.{decimals}f}) "
+            f"leaving a strong wick rejection. Expecting order flow to target the Range Low."
+        )
+    elif swept_low:
+        signal = "BULLISH"
+        confidence = 92.0 if fvg_exists else 70.0
+        entry_price = current_price
+        stop_loss = recent_low - (recent_low * 0.0005)
+        take_profit = crt_high
+        reasoning = (
+            f"Liquidity Sweep confirmed. Price swept sell stops below the HTF Range Low ({crt_low:.{decimals}f}) "
+            f"and rejected cleanly. Targets are set on premium external liquidity structures."
+        )
     else:
-        st.success(f"🟢 Price is trading in the **DISCOUNT** zone (Below 50% Equilibrium). Look for longs if LTF trend shifts bullish.")
+        signal = "NEUTRAL"
+        confidence = 0.0
+        entry_price = current_price
+        stop_loss = 0.0
+        take_profit = 0.0
+        
+        # Determine internal market zone
+        if current_price > equilibrium:
+            reasoning = f"Market is currently trading inside a PREMIUM Zone (Above {equilibrium:.{decimals}f}). Waiting on a sweep confirmation."
+        else:
+            reasoning = f"Market is currently trading inside a DISCOUNT Zone (Below {equilibrium:.{decimals}f}). Waiting on a sweep confirmation."
 
-    # ----------------------------------------------------
-    # INTERACTIVE PLOTLY CHART
-    # ----------------------------------------------------
-    st.write("### 📈 Live Price Action Chart")
+    # --- UI Rendering ---
+    st.subheader("📡 Live Analytics Feed")
     
-    fig = go.Figure(data=[go.Candlestick(
-        x=df_ltf.index,
-        open=df_ltf['Open'],
-        high=df_ltf['High'],
-        low=df_ltf['Low'],
-        close=df_ltf['Close'],
-        name="Price Action"
-    )])
-    
-    # Overlay HTF Ranges
-    fig.add_hline(y=crt_high, line_dash="solid", line_color="red", 
-                  annotation_text=f"HTF High ({crt_high:.{decimals}f})", annotation_position="top left")
-    fig.add_hline(y=equilibrium, line_dash="dash", line_color="orange", 
-                  annotation_text=f"Equilibrium ({equilibrium:.{decimals}f})", annotation_position="right")
-    fig.add_hline(y=crt_low, line_dash="solid", line_color="green", 
-                  annotation_text=f"HTF Low ({crt_low:.{decimals}f})", annotation_position="bottom left")
-    
-    # Optional quarterly guidelines
-    fig.add_hline(y=premium_quarter, line_dash="dot", line_color="#ff4d4d", opacity=0.3)
-    fig.add_hline(y=discount_quarter, line_dash="dot", line_color="#4dff4d", opacity=0.3)
+    if signal == "BULLISH":
+        st.success(f"🟢 SIGNAL: BULLISH | Confidence: {confidence}%")
+    elif signal == "BEARISH":
+        st.error(f"🔴 SIGNAL: BEARISH | Confidence: {confidence}%")
+    else:
+        st.warning(f"⚪ SIGNAL: NO ACTIVE CRITERIA | Confidence: --")
 
-    fig.update_layout(
-        xaxis_rangeslider_visible=False,
-        template="plotly_dark",
-        height=550,
-        margin=dict(l=10, r=10, t=10, b=10)
-    )
+    col_stat1, col_stat2, col_stat3 = st.columns(3)
+    col_stat1.metric(label="Live Close Price", value=f"{current_price:,.{decimals}f}")
+    col_stat2.metric(label="HTF Range High", value=f"{crt_high:,.{decimals}f}")
+    col_stat3.metric(label="HTF Range Low", value=f"{crt_low:,.{decimals}f}")
+
+    st.write("---")
+
+    # Clean logic breakdown panel
+    st.markdown("### 📋 System Logic Breakdown")
+    st.info(reasoning)
+
+    # Risk Calculation Panel (ZAR Output)
+    st.markdown("### 🎯 Target Execution Protection Matrix")
     
-    st.plotly_chart(fig, use_container_width=True)
-
-    # ----------------------------------------------------
-    # RAW DATA FEED FOR AUDITING
-    # ----------------------------------------------------
-    with st.expander("📁 Raw Live Feed Data"):
-        st.dataframe(df_ltf.tail(15))
-
-else:
-    st.error("⚠️ Data Sync Interrupted. The markets might be closed (weekends), or Yahoo Finance is experiencing high traffic. Try refreshing or switching timeframes.")
+    if signal != "NEUTRAL" and stop_loss > 0:
+        risk_distance = abs(entry_price - stop_loss)
+        risk_capital_zar = capital_zar * (risk_percent / 100)
+        
+        st.write(f"**Target Entry Price:** {entry_price:.{decimals}f}")
+        st.write(f"**Calculated Stop Loss:** {stop_loss:.{decimals}f}")
+        st.write(f"**Calculated Take Profit:** {take_profit:.{decimals}f}")
+        
+        st.write("---")
