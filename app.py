@@ -1,206 +1,185 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import numpy as np
+import plotly.graph_objects as go
 
-# --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="RETAIL PULLBACK MATRIX V4", layout="centered", page_icon="🧬")
+# ----------------------------------------------------
+# PAGE CONFIG & STYLING
+# ----------------------------------------------------
+st.set_page_config(
+    page_title="CRT Cloud Terminal",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# --- EXACT V4 CSS STYLING ---
+# Dark Mode CSS Tweaks
 st.markdown("""
     <style>
-    /* Deep Slate-Navy Background */
-    .stApp { background-color: #060b13; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
-    
-    /* Hide Default Streamlit UI elements */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-
-    /* Custom Cards matching the screenshots */
-    .v4-warning-box { background-color: #0a111c; border: 1px solid #162438; border-radius: 8px; padding: 20px; text-align: center; margin-bottom: 20px; }
-    .v4-warning-text { color: #f43f5e; font-family: monospace; font-size: 14px; font-weight: bold; line-height: 1.5; margin: 0; }
-    
-    .v4-card { background-color: #0a111c; border: 1px solid #162438; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
-    .v4-label { color: #8a99ad; font-size: 13px; font-weight: bold; margin-bottom: 8px; display: block; }
-    
-    /* Tabs mimicking the UI */
-    .v4-tabs { display: flex; border-bottom: 1px solid #162438; margin-bottom: 15px; padding-bottom: 0; }
-    .v4-tab-active { color: #f43f5e; border-bottom: 2px solid #f43f5e; padding: 10px 15px; font-size: 13px; font-weight: bold; text-transform: uppercase; }
-    .v4-tab-inactive { color: #8a99ad; padding: 10px 15px; font-size: 13px; font-weight: bold; text-transform: uppercase; }
-
-    /* Strategy Overview Section */
-    .strategy-title { color: #67e8f9; text-shadow: 0 0 10px rgba(103, 232, 249, 0.3); font-size: 24px; font-weight: bold; margin-top: 5px; margin-bottom: 15px; }
-    .strategy-text { color: #cbd5e1; font-size: 14px; line-height: 1.6; }
-
-    /* Signal Output Box */
-    .signal-title { font-size: 26px; font-weight: bold; margin: 0; }
-    .signal-sell { color: #67e8f9; text-shadow: 0 0 10px rgba(103, 232, 249, 0.4); }
-    .signal-buy { color: #10b981; text-shadow: 0 0 10px rgba(16, 185, 129, 0.4); }
-
-    /* Logic Breakdown Box (Blue variant) */
-    .logic-box { background-color: #0f1e36; border: 1px solid #1d3557; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
-    .logic-text { color: #60a5fa; font-size: 13px; font-weight: 500; margin: 0; }
-
-    /* Custom Run Button */
-    .stButton>button { background: linear-gradient(180deg, #0f1c2e, #0a111c); border: 1px solid #38bdf8; box-shadow: 0 0 10px rgba(56, 189, 248, 0.2); color: #e0f2fe; width: 100%; height: 50px; border-radius: 8px; font-weight: bold; font-size: 14px; transition: 0.3s; }
-    .stButton>button:hover { background: #38bdf8; color: #060b13; box-shadow: 0 0 20px rgba(56, 189, 248, 0.5); }
-    
-    /* Metrics Grid Setup */
-    .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px; }
-    .metric-box { background-color: #0a111c; border: 1px solid #162438; border-radius: 8px; padding: 15px; }
-    .metric-value { font-size: 24px; color: #f8fafc; font-family: monospace; margin-top: 5px; margin-bottom: 0; }
-    .metric-title { font-size: 12px; color: #8a99ad; display: flex; align-items: center; gap: 5px; }
+    .stMetric {
+        background-color: #1e1e1e;
+        border: 1px solid #333333;
+        padding: 15px;
+        border-radius: 10px;
+    }
     </style>
-""", unsafe_allow_html=True)
+""", unsafe_render_html=True)
 
-# --- 1. WARNING HEADER ---
-st.markdown("""
-<div class="v4-warning-box">
-    <p class="v4-warning-text">⚠️ NOTE: API data feeds hold a structural 15-minute delay. Use targets as pips/dist markers on MT5.</p>
-</div>
-""", unsafe_allow_html=True)
+# ----------------------------------------------------
+# HEADER
+# ----------------------------------------------------
+st.title("⚡ CRT Cloud Market Terminal")
+st.caption("No Windows PC. No local MT5 terminal. 100% cloud-native live data via Yahoo Finance.")
+st.write("---")
 
-# --- 2. INPUT BLOCKS ---
-st.markdown('<div class="v4-card"><span class="v4-label">💸 TARGET ASSET BLOCK:</span>', unsafe_allow_html=True)
+# ----------------------------------------------------
+# SIDEBAR SETTINGS
+# ----------------------------------------------------
+st.sidebar.header("⚙️ Configuration")
+
+# Dynamic asset map (Forex and Gold Spot proxy)
 asset_map = {
-    "GOLD (XAUUSD)": "GC=F", 
-    "EURUSD": "EURUSD=X", 
-    "USDJPY": "JPY=X", 
-    "GBPUSD": "GBPUSD=X"
+    "Gold Spot (Proxy: GC=F)": "GC=F",
+    "EUR/USD": "EURUSD=X",
+    "GBP/USD": "GBPUSD=X",
+    "USD/JPY": "USDJPY=X",
+    "GBP/JPY": "GBPJPY=X"
 }
-selected_asset = st.selectbox("", list(asset_map.keys()), label_visibility="collapsed")
-st.markdown('</div>', unsafe_allow_html=True)
 
-st.markdown('<div class="v4-card"><span class="v4-label">⌛ RUNTIME TIMEFRAME:</span>', unsafe_allow_html=True)
-tf_map = {
-    "M1 (1 Minute Scalp)": "1m",
-    "M5 (5 Minute Scalp)": "5m",
-    "M15 (15 Minute Day)": "15m",
-    "M30 (30 Minute Trend)": "30m",
-    "H1 (1 Hour Swing)": "1h",
-    "H4 (4 Hour Swing)": "1h", # Fallback for yfinance limits
-    "D1 (Daily Trend)": "1d"
-}
-selected_tf = st.selectbox("", list(tf_map.keys()), index=1, label_visibility="collapsed")
-st.markdown('</div>', unsafe_allow_html=True)
+selected_asset = st.sidebar.selectbox("Select Trading Asset", list(asset_map.keys()), index=0)
+ticker = asset_map[selected_asset]
 
-st.markdown('<div class="v4-card"><span class="v4-label">💰 ACCOUNT CAPITALIZATION (ZAR):</span>', unsafe_allow_html=True)
-balance = st.number_input("", value=1000.00, step=100.0, format="%.2f", label_visibility="collapsed")
-st.markdown('</div>', unsafe_allow_html=True)
+# Interval setup
+ltf_interval = st.sidebar.selectbox(
+    "Execution TF (Lower Timeframe Chart)",
+    ["1m", "5m", "15m", "30m", "1h"],
+    index=1
+)
 
-# --- 3. V4 TABS & OVERVIEW ---
-st.markdown("""
-<div class="v4-tabs">
-    <div class="v4-tab-active">🧬 RETAIL PULLBACK MATRIX (V4)</div>
-    <div class="v4-tab-inactive">🏛️ INSTITUTIONAL SMC</div>
-</div>
-<div class="v4-card">
-    <h2 class="strategy-title">🧬 Strategy Overview</h2>
-    <p class="strategy-text">Tracks momentum pullbacks into critical Fibonacci retracement fields verified via Stochastic exhaustion filters.</p>
-</div>
-""", unsafe_allow_html=True)
+htf_interval = st.sidebar.selectbox(
+    "CRT Range TF (Higher Timeframe Source)",
+    ["1h", "1d", "1wk"],
+    index=1
+)
 
-# --- 4. EXECUTION ENGINE ---
-if st.button("🧊 RUN RETAIL MATRIX SCAN"):
-    with st.spinner("Aligning Quantum Matrix..."):
-        try:
-            symbol = asset_map[selected_asset]
-            interval = tf_map[selected_tf]
-            
-            # Smart period assignment to avoid YF interval crash
-            period = "1d" if interval == "1m" else ("5d" if interval in ["5m","15m","30m"] else "1mo")
-            
-            ticker = yf.Ticker(symbol)
-            df = ticker.history(period=period, interval=interval)
-            
-            if len(df) >= 30:
-                # Core Variables
-                close_price = df['Close'].iloc[-1]
-                
-                # Stochastic %K
-                low14 = df['Low'].rolling(14).min().iloc[-1]
-                high14 = df['High'].rolling(14).max().iloc[-1]
-                stoch_k = ((close_price - low14) / (high14 - low14)) * 100
-                
-                # Fib Retracement (Last 30 periods)
-                swing_high = df['High'].tail(30).max()
-                swing_low = df['Low'].tail(30).min()
-                diff = swing_high - swing_low
-                fib_50 = swing_low + (diff * 0.5)
-                fib_618 = swing_low + (diff * 0.618)
-                
-                # Vector Trend (SMA 20)
-                sma_20 = df['Close'].rolling(20).mean().iloc[-1]
-                trend = "BULLISH" if close_price > sma_20 else "BEARISH"
-                
-                # Signal Processing
-                signal_dir = "BUY" if trend == "BULLISH" else "SELL"
-                conf = np.random.randint(62, 88) # Matrix calculation confidence
-                
-                # Lot Sizing (ZAR Based -> 5% Risk per trade)
-                risk_zar = balance * 0.05
-                # Assuming ~R18.00 per USD, standard scaling for FX/Gold
-                estimated_lot = max(0.01, (risk_zar / 18.0) / 100)
-                
-                # Targets
-                sl_distance = 0.0020 if "USD" in symbol else 3.5
-                tp_distance = 0.0040 if "USD" in symbol else 7.0
-                
-                sl = close_price - sl_distance if signal_dir == "BUY" else close_price + sl_distance
-                tp = close_price + tp_distance if signal_dir == "BUY" else close_price - tp_distance
+# Dynamic periods to prevent API errors
+ltf_period_map = {"1m": "1d", "5m": "5d", "15m": "5d", "30m": "5d", "1h": "1mo"}
+htf_period_map = {"1h": "1mo", "1d": "3mo", "1wk": "1y"}
 
-                # FORMATTING PRECISION
-                precision = 5 if "USD" in symbol else 2
+ltf_period = ltf_period_map[ltf_interval]
+htf_period = htf_period_map[htf_interval]
 
-                # --- RENDER V4 OUTPUT ---
-                signal_class = "signal-buy" if signal_dir == "BUY" else "signal-sell"
-                
-                st.markdown(f"""
-                <div class="v4-card" style="padding: 25px;">
-                    <h2 class="signal-title {signal_class}">⚡ V4 SIGNAL OUTPUT: {signal_dir} (Confidence: {conf}%)</h2>
-                </div>
-                
-                <div class="logic-box">
-                    <p class="logic-text">📋 <b>System Logic Breakdown:</b> {trend.capitalize()} configuration holds. Spot trading {'above' if trend == 'BULLISH' else 'below'} active structural resistance zones based on matrix exhaustion.</p>
-                </div>
-                
-                <h3 class="strategy-title" style="font-size: 18px; margin-top: 25px;">🎯 TARGET EXECUTION PROTECTION MATRIX</h3>
-                
-                <div class="grid-container">
-                    <div class="metric-box">
-                        <span class="metric-title">🧊 Spot Price</span>
-                        <p class="metric-value">{close_price:.{precision}f}</p>
-                    </div>
-                    <div class="metric-box">
-                        <span class="metric-title">📊 Stochastic %K</span>
-                        <p class="metric-value">{stoch_k:.2f}</p>
-                    </div>
-                    <div class="metric-box">
-                        <span class="metric-title">🟠 Fib 50.0% Line</span>
-                        <p class="metric-value">{fib_50:.{precision}f}</p>
-                    </div>
-                    <div class="metric-box">
-                        <span class="metric-title">📈 Vector Trend</span>
-                        <p class="metric-value" style="color: {'#10b981' if trend == 'BULLISH' else '#f43f5e'};">{trend}</p>
-                    </div>
-                    <div class="metric-box">
-                        <span class="metric-title">🔵 Fib 61.8% Line</span>
-                        <p class="metric-value">{fib_618:.{precision}f}</p>
-                    </div>
-                </div>
+# ----------------------------------------------------
+# DATA LOADER
+# ----------------------------------------------------
+@st.cache_data(ttl=10) # Auto-refresh data cache every 10 seconds
+def fetch_market_data(symbol, period, interval):
+    try:
+        df = yf.download(tickers=symbol, period=period, interval=interval, progress=False)
+        if df.empty:
+            return None
+        # Standardize multi-index columns if yfinance returns them
+        df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
+        return df.dropna()
+    except Exception:
+        return None
 
-                <div class="v4-card">
-                    <span class="v4-label">🛡️ MT5 DEPLOYMENT PARAMETERS:</span>
-                    <p style="font-family: monospace; font-size: 16px; margin: 5px 0;">ENTRY PRICE: <b style="color: #67e8f9;">{close_price:.{precision}f}</b></p>
-                    <p style="font-family: monospace; font-size: 16px; margin: 5px 0;">STOP LOSS: <b style="color: #f43f5e;">{sl:.{precision}f}</b></p>
-                    <p style="font-family: monospace; font-size: 16px; margin: 5px 0;">TAKE PROFIT: <b style="color: #10b981;">{tp:.{precision}f}</b></p>
-                    <hr style="border: 0; border-top: 1px solid #162438; margin: 15px 0;">
-                    <p style="font-family: monospace; font-size: 18px; color: #facc15; margin: 0;">SUGGESTED LOT SIZE (ZAR BASIS): <b>{estimated_lot:.2f}</b></p>
-                </div>
-                """, unsafe_allow_html=True)
+# Fetch Data
+with st.spinner("Syncing live market feeds..."):
+    df_ltf = fetch_market_data(ticker, ltf_period, ltf_interval)
+    df_htf = fetch_market_data(ticker, htf_period, htf_interval)
 
-            else:
-                st.error("Market data unavailable or insufficient candle history for this timeframe.")
-        except Exception as e:
-            st.error(f"MATRIX SYSTEM ERROR: {e}")
+# Determine decimal formatting based on pair type
+decimals = 5 if ("=X" in ticker and "JPY" not in ticker) else 2
+
+if df_ltf is not None and df_htf is not None and len(df_ltf) >= 2 and len(df_htf) >= 2:
+    
+    # ----------------------------------------------------
+    # CRT RANGE CALCULATION (Using previous closed HTF candle)
+    # ----------------------------------------------------
+    crt_candle = df_htf.iloc[-2]  # The completed previous HTF candle
+    crt_high = float(crt_candle['High'])
+    crt_low = float(crt_candle['Low'])
+    equilibrium = (crt_high + crt_low) / 2.0
+    
+    # Quarterly ranges (25% and 75% levels)
+    premium_quarter = crt_low + 0.75 * (crt_high - crt_low)
+    discount_quarter = crt_low + 0.25 * (crt_high - crt_low)
+    
+    # Current Execution Price
+    current_price = float(df_ltf['Close'].iloc[-1])
+    price_change = current_price - float(df_ltf['Close'].iloc[-2])
+    pct_change = (price_change / float(df_ltf['Close'].iloc[-2])) * 100
+
+    # ----------------------------------------------------
+    # METRICS DISPLAY
+    # ----------------------------------------------------
+    st.subheader(f"📊 Live {selected_asset} Overview")
+    
+    col_price, col_high, col_eq, col_low = st.columns(4)
+    col_price.metric(
+        label="Live Price",
+        value=f"{current_price:.{decimals}f}",
+        delta=f"{price_change:+.{decimals}f} ({pct_change:+.2f}%)"
+    )
+    col_high.metric(label=f"HTF Range High ({htf_interval})", value=f"{crt_high:.{decimals}f}")
+    col_eq.metric(label="Equilibrium (50%)", value=f"{equilibrium:.{decimals}f}")
+    col_low.metric(label=f"HTF Range Low ({htf_interval})", value=f"{crt_low:.{decimals}f}")
+
+    # ----------------------------------------------------
+    # CRT STATE ANALYSIS
+    # ----------------------------------------------------
+    st.write("### 🎯 Candle Range Theory (CRT) Analysis")
+    
+    if current_price > crt_high:
+        st.error(f"🚨 Price has swept above the HTF Range High ({crt_high:.{decimals}f}). Watch out for external liquidity sweeps & reversals!")
+    elif current_price < crt_low:
+        st.success(f"🚨 Price has swept below the HTF Range Low ({crt_low:.{decimals}f}). Look for liquidity sweeps & LTF structural shifts!")
+    elif current_price > equilibrium:
+        st.info(f"🔴 Price is trading in the **PREMIUM** zone (Above 50% Equilibrium). Look for shorts if LTF trend shifts bearish.")
+    else:
+        st.success(f"🟢 Price is trading in the **DISCOUNT** zone (Below 50% Equilibrium). Look for longs if LTF trend shifts bullish.")
+
+    # ----------------------------------------------------
+    # INTERACTIVE PLOTLY CHART
+    # ----------------------------------------------------
+    st.write("### 📈 Live Price Action Chart")
+    
+    fig = go.Figure(data=[go.Candlestick(
+        x=df_ltf.index,
+        open=df_ltf['Open'],
+        high=df_ltf['High'],
+        low=df_ltf['Low'],
+        close=df_ltf['Close'],
+        name="Price Action"
+    )])
+    
+    # Overlay HTF Ranges
+    fig.add_hline(y=crt_high, line_dash="solid", line_color="red", 
+                  annotation_text=f"HTF High ({crt_high:.{decimals}f})", annotation_position="top left")
+    fig.add_hline(y=equilibrium, line_dash="dash", line_color="orange", 
+                  annotation_text=f"Equilibrium ({equilibrium:.{decimals}f})", annotation_position="right")
+    fig.add_hline(y=crt_low, line_dash="solid", line_color="green", 
+                  annotation_text=f"HTF Low ({crt_low:.{decimals}f})", annotation_position="bottom left")
+    
+    # Optional quarterly guidelines
+    fig.add_hline(y=premium_quarter, line_dash="dot", line_color="#ff4d4d", opacity=0.3)
+    fig.add_hline(y=discount_quarter, line_dash="dot", line_color="#4dff4d", opacity=0.3)
+
+    fig.update_layout(
+        xaxis_rangeslider_visible=False,
+        template="plotly_dark",
+        height=550,
+        margin=dict(l=10, r=10, t=10, b=10)
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+
+    # ----------------------------------------------------
+    # RAW DATA FEED FOR AUDITING
+    # ----------------------------------------------------
+    with st.expander("📁 Raw Live Feed Data"):
+        st.dataframe(df_ltf.tail(15))
+
+else:
+    st.error("⚠️ Data Sync Interrupted. The markets might be closed (weekends), or Yahoo Finance is experiencing high traffic. Try refreshing or switching timeframes.")
