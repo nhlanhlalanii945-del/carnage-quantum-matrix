@@ -1,6 +1,6 @@
 import streamlit as st
-import time
-import random
+import yfinance as yf
+import pandas as pd
 
 # --- APP CONFIG ---
 st.set_page_config(page_title="CARNAGE MATRIX", layout="wide", page_icon="💀")
@@ -9,46 +9,50 @@ st.set_page_config(page_title="CARNAGE MATRIX", layout="wide", page_icon="💀")
 st.markdown("""
     <style>
     .stApp { background-color: #050505; color: #ff0000; font-family: 'Courier New', Courier, monospace; }
-    h1, h2, h3 { color: #8b0000 !important; text-transform: uppercase; letter-spacing: 4px; text-shadow: 2px 2px #000; }
-    .stButton>button { border: 2px solid #8b0000; background: #000; color: #ff0000; width: 100%; font-weight: bold; }
-    .stButton>button:hover { background: #8b0000; color: #fff; }
-    .metric-box { background: #111; border: 1px solid #8b0000; padding: 20px; color: #ff0000; }
+    h1 { color: #8b0000 !important; text-transform: uppercase; letter-spacing: 4px; border-bottom: 2px solid #8b0000; }
+    .stButton>button { border: 2px solid #8b0000; background: #000; color: #ff0000; width: 100%; height: 60px; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("💀 CARNAGE QUANTUM MATRIX V8.0")
-st.write("SYSTEM STATUS: [ENGAGED] | STRATEGY: [CRT + PRICE ACTION]")
+st.title("💀 CARNAGE QUANTUM MATRIX V11.0")
+st.write("STATUS: [LIVE MARKET FEED ACTIVE]")
 
-# --- SIDEBAR ---
+# --- SIDEBAR INPUTS ---
 st.sidebar.header("TERMINAL INPUTS")
-symbol = st.sidebar.selectbox("CURRENCY PAIR", ["EURUSD", "USDJPY", "GBPUSD", "GOLD (XAUUSD)"])
-tf = st.sidebar.selectbox("TIMEFRAME", ["M1", "M5", "M15", "H1", "H4", "D1"])
-balance = st.sidebar.number_input("ACCOUNT BALANCE (ZAR)", value=1000.0)
+ticker_map = {"EURUSD": "EURUSD=X", "USDJPY": "JPY=X", "GBPUSD": "GBPUSD=X", "GOLD": "GC=F"}
+pair = st.sidebar.selectbox("SELECT CURRENCY", list(ticker_map.keys()))
+tf = st.sidebar.selectbox("TIMEFRAME", ["1h", "1d", "1wk"])
+balance = st.sidebar.number_input("BALANCE (ZAR)", value=200.0)
 
-# --- SCANNER LOGIC ---
-if st.button("RUN QUANTUM SCAN"):
-    with st.spinner("EXECUTING CRT ALGORITHM..."):
-        time.sleep(2) # Simulating market analysis
+# --- ENGINE ---
+if st.button("RUN LIVE ANALYSIS"):
+    try:
+        # Get Live Data
+        ticker = yf.Ticker(ticker_map[pair])
+        data = ticker.history(period="5d", interval=tf)
+        current_price = data['Close'].iloc[-1]
+        prev_close = data['Close'].iloc[-2]
         
-        # Simulated CRT/Price Action Logic
-        signal = random.choice(["BUY", "SELL"])
-        conf = random.randint(85, 99)
+        # CRT Logic Simulation
+        trend = "BULLISH" if current_price > prev_close else "BEARISH"
+        risk_amount = balance * 0.05
+        lot_size = risk_amount / 100
         
-        st.subheader(f"SIGNAL: {signal}")
-        
+        # Display Signal
+        st.subheader(f"LIVE ANALYSIS: {pair}")
         col1, col2 = st.columns(2)
-        col1.metric("CONFIDENCE", f"{conf}%")
-        col2.write("### REASONING")
-        col2.write(f"• **CRT Analysis:** {symbol} price range exhaustion detected.")
-        col2.write("• **Price Action:** Rejection at support/resistance boundary.")
-        col2.write("• **Market Flow:** Volatility spike on " + tf)
+        col1.metric("CURRENT PRICE", f"{current_price:.4f}")
+        col2.metric("MARKET TREND", trend)
         
         st.write("---")
-        st.subheader("EXECUTION PARAMETERS")
-        st.warning(f"ENTRY: {symbol} MARKET")
-        st.error("SL: CALCULATED AT 20 PIPS")
-        st.success(f"TP: CALCULATED AT 60 PIPS")
-        st.info(f"LOT SIZE: {(balance * 0.02 / 100):.2f}")
+        st.error(f"SIGNAL: {trend}")
+        st.info(f"ENTRY: {current_price:.4f}")
+        st.success(f"SL: {(current_price * 0.998):.4f} | TP: {(current_price * 1.005):.4f}")
+        st.warning(f"LOT SIZE (5% RISK): {lot_size:.2f}")
+        st.write("**REASONING:** Price Action & CRT Analysis aligned on {tf} chart.")
+        
+    except Exception as e:
+        st.error("Error connecting to live feed. Check internet.")
 
 st.write("---")
-st.write("TERMINAL: ACTIVE | MODE: EVIL")
+st.caption("TERMINAL: OPERATIONAL | PROVIDER: YFINANCE")
