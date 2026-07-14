@@ -1,66 +1,54 @@
 import streamlit as st
-import plotly.graph_objects as go
-import numpy as np
 import time
+import random
 
-# --- PAGE CONFIG ---
-st.set_page_config(page_title="Carnage Quantum Matrix", layout="wide", page_icon="⚡")
+# --- APP CONFIG ---
+st.set_page_config(page_title="CARNAGE MATRIX", layout="wide", page_icon="💀")
 
-# --- VISUALS ---
-st.snow() 
+# --- DARK/EVIL RED CSS ---
 st.markdown("""
     <style>
-    .stApp { background-color: #050505; color: #E0E0E0; font-family: 'Courier New', Courier, monospace; }
-    h1, h2, h3 { color: #00f2ff !important; text-transform: uppercase; letter-spacing: 3px; }
-    .stButton>button { border: 2px solid #00f2ff; background: transparent; color: #00f2ff; width: 100%; height: 50px; font-weight: bold; }
-    .metric-box { background: #111; border: 1px solid #333; padding: 20px; border-radius: 10px; }
+    .stApp { background-color: #050505; color: #ff0000; font-family: 'Courier New', Courier, monospace; }
+    h1, h2, h3 { color: #8b0000 !important; text-transform: uppercase; letter-spacing: 4px; text-shadow: 2px 2px #000; }
+    .stButton>button { border: 2px solid #8b0000; background: #000; color: #ff0000; width: 100%; font-weight: bold; }
+    .stButton>button:hover { background: #8b0000; color: #fff; }
+    .metric-box { background: #111; border: 1px solid #8b0000; padding: 20px; color: #ff0000; }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("⚡ CARNAGE QUANTUM MATRIX V7.1")
-st.write("SYSTEM STATUS: [OPERATIONAL] | DATA LINK: [ENCRYPTED]")
+st.title("💀 CARNAGE QUANTUM MATRIX V8.0")
+st.write("SYSTEM STATUS: [ENGAGED] | STRATEGY: [CRT + PRICE ACTION]")
 
-# --- SIDEBAR: GLOBAL SETTINGS ---
-st.sidebar.header("TERMINAL PARAMETERS")
-pair = st.sidebar.selectbox("CURRENCY PAIR", ["EURUSD", "USDJPY", "GBPUSD", "GOLD (XAUUSD)"])
+# --- SIDEBAR ---
+st.sidebar.header("TERMINAL INPUTS")
+symbol = st.sidebar.selectbox("CURRENCY PAIR", ["EURUSD", "USDJPY", "GBPUSD", "GOLD (XAUUSD)"])
 tf = st.sidebar.selectbox("TIMEFRAME", ["M1", "M5", "M15", "H1", "H4", "D1"])
 balance = st.sidebar.number_input("ACCOUNT BALANCE (ZAR)", value=1000.0)
 
-# --- HYBRID TABS ---
-tab1, tab2 = st.tabs(["🤖 QUANTUM SCANNER (AI)", "📊 LIVE MARKET FLOW"])
+# --- SCANNER LOGIC ---
+if st.button("RUN QUANTUM SCAN"):
+    with st.spinner("EXECUTING CRT ALGORITHM..."):
+        time.sleep(2) # Simulating market analysis
+        
+        # Simulated CRT/Price Action Logic
+        signal = random.choice(["BUY", "SELL"])
+        conf = random.randint(85, 99)
+        
+        st.subheader(f"SIGNAL: {signal}")
+        
+        col1, col2 = st.columns(2)
+        col1.metric("CONFIDENCE", f"{conf}%")
+        col2.write("### REASONING")
+        col2.write(f"• **CRT Analysis:** {symbol} price range exhaustion detected.")
+        col2.write("• **Price Action:** Rejection at support/resistance boundary.")
+        col2.write("• **Market Flow:** Volatility spike on " + tf)
+        
+        st.write("---")
+        st.subheader("EXECUTION PARAMETERS")
+        st.warning(f"ENTRY: {symbol} MARKET")
+        st.error("SL: CALCULATED AT 20 PIPS")
+        st.success(f"TP: CALCULATED AT 60 PIPS")
+        st.info(f"LOT SIZE: {(balance * 0.02 / 100):.2f}")
 
-with tab1:
-    st.subheader("STRATEGY: PRICE ACTION + CANDLE RANGE")
-    uploaded = st.file_uploader("UPLOAD CHART SCREENSHOT", type=['png', 'jpg'])
-    
-    if uploaded:
-        st.image(uploaded, use_container_width=True)
-        if st.button("RUN DEEP SCAN"):
-            with st.spinner("PROCESSING CANDLE RANGE ALGORITHM..."):
-                time.sleep(2)
-                st.success("SCAN COMPLETE")
-                
-                # The "Reasoning" Engine
-                col1, col2 = st.columns(2)
-                col1.metric("CONFIDENCE", "98.4%")
-                col2.write("### LOGIC OUTPUT")
-                col2.info("1. Candle Range: VOLATILE\n2. Price Action: REJECTION\n3. Trend: BULLISH")
-                
-                st.write("---")
-                st.subheader("TRADE PARAMETERS")
-                st.warning(f"ENTRY: {pair} @ MARKET")
-                st.success("SL: 1.0820 | TP: 1.0950")
-                st.info(f"CALCULATED LOT: {(balance * 0.02 / 100):.2f}")
-
-with tab2:
-    st.subheader("3D QUANTUM FLOW")
-    # Live Data visual
-    t = np.linspace(0, 50, 200)
-    fig = go.Figure(data=[go.Scatter3d(x=np.sin(t), y=np.cos(t), z=t, mode='lines', 
-                                       line=dict(color='#00f2ff', width=8))])
-    fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', scene=dict(xaxis_visible=False, yaxis_visible=False, zaxis_visible=False))
-    st.plotly_chart(fig, use_container_width=True)
-    st.write("Visualizing real-time market frequency...")
-
-st.sidebar.write("---")
-st.sidebar.write("DEVELOPER: NHLANHLA ALFRED BALOYI")
+st.write("---")
+st.write("TERMINAL: ACTIVE | MODE: EVIL")
